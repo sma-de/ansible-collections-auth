@@ -1,0 +1,7 @@
+---
+
+  - include_tasks: handle_user_realm_feds.yml
+    loop: "{{ _iter_user_feds.value.realms | dict2items() }}"
+    loop_control:
+      loop_var: _iter_user_feds_realm
+

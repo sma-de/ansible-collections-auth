@@ -1,0 +1,8 @@
+---
+
+  - name: create / delete user federation  ==>>  {{ _iter_user_feds_realm.value.taskname }}
+    smabot.auth.keycloak_modules_global_auth_wrapper:
+      module: community.general.keycloak_user_federation
+      params: >-
+        {{ _iter_user_feds_realm.value.config }}
+

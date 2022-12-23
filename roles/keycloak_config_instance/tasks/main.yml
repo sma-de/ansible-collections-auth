@@ -1,0 +1,53 @@
+---
+
+    ## support vars.d dirs
+  - include_role:
+      name: smabot.base.expand_vardirs
+
+
+  - smabot.auth.normalize_keycloak_config_instance_args:
+    register: _tmp_normed_cfg
+    ##no_log: true
+
+  - set_fact:
+      smabot_auth_keycloak_config_instance_args_normed: "{{ _tmp_normed_cfg.normalized }}"
+    ##no_log: true
+
+
+    ## make auth params globally avaible so that we dont have
+    ## to pass them into each module call repeatedly
+  - set_fact:
+      smabot_auth_keycloak_auth_url: >-
+        {{ smabot_auth_keycloak_config_instance_args_normed.server_url }}
+      smabot_auth_keycloak_auth_username: >-
+        {{ smabot_auth_keycloak_config_instance_args_normed.login.params.username }}
+      smabot_auth_keycloak_auth_password: >-
+        {{ smabot_auth_keycloak_config_instance_args_normed.login.params.password }}
+      smabot_auth_keycloak_validate_certs: >-
+        {{ smabot_auth_keycloak_config_instance_args_normed.connection.validate_certs }}
+    no_log: true
+
+
+##### create/delete realms
+
+##### create/delete user federations
+  - include_tasks: handle_user_federations.yml
+    loop: >-
+      {{ smabot_auth_keycloak_config_instance_args_normed.user_federations.federations
+       | dict2items() }}
+    loop_control:
+      loop_var: _iter_user_feds
+
+##### create/delete clients
+
+
+##### final post processing
+
+    ## unset / "delete" auth params
+  - set_fact:
+      smabot_auth_keycloak_auth_url: null
+      smabot_auth_keycloak_auth_username: null
+      smabot_auth_keycloak_auth_password: null
+      smabot_auth_keycloak_validate_certs: null
+    no_log: true
+
