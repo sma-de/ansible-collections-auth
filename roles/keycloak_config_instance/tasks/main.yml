@@ -29,6 +29,13 @@
 
 
 ##### create/delete realms
+  - include_tasks: handle_realms.yml
+    loop: >-
+      {{ smabot_auth_keycloak_config_instance_args_normed.realms.realms
+       | dict2items() }}
+    loop_control:
+      loop_var: _iter_realms
+
 
 ##### create/delete user federations
   - include_tasks: handle_user_federations.yml

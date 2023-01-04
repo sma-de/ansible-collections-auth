@@ -26,6 +26,7 @@ class ConfigRootNormalizer(NormalizerBase):
         subnorms = kwargs.setdefault('sub_normalizers', [])
         subnorms += [
           ConnectionNormer(pluginref),
+          RealmInstanceNormer(pluginref),
           UserFederationInstanceNormer(pluginref),
         ]
 
@@ -44,6 +45,49 @@ class ConnectionNormer(NormalizerNamed):
     @property
     def config_path(self):
         return ['connection']
+
+
+class RealmInstanceNormer(NormalizerNamed):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          RealmInstanceConfigNormer(pluginref),
+        ]
+
+        super(RealmInstanceNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+    @property
+    def config_path(self):
+        return ['realms', 'realms', SUBDICT_METAKEY_ANY]
+
+    @property
+    def name_key(self):
+        return 'id'
+
+
+class RealmInstanceConfigNormer(NormalizerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        super(RealmInstanceConfigNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+        self.default_setters['state'] = DefaultSetterConstant('present')
+
+    @property
+    def config_path(self):
+        return ['config']
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs)
+
+        my_subcfg['id'] = pcfg['id']
+
+        setdefault_none(my_subcfg, 'realm', my_subcfg['id'])
+        return my_subcfg
 
 
 class UserFederationInstanceNormer(NormalizerNamed):

@@ -1,0 +1,8 @@
+---
+
+  - name: create / delete realm  ==>>  {{ _iter_realms.value.id }}
+    smabot.auth.keycloak_modules_global_auth_wrapper:
+      module: community.general.keycloak_realm
+      params: >-
+        {{ _iter_realms.value.config }}
+
