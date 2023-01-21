@@ -137,6 +137,10 @@ class RealmAttachableNormer(NormalizerBase, abc.ABC):
     def cfg_toplvl_distance(self):
         pass
 
+    @property
+    def realm_merge_ingore_keys(self):
+        return []
+
     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
         unset = object()
 
@@ -172,11 +176,18 @@ class RealmAttachableNormer(NormalizerBase, abc.ABC):
 
 
     def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
-        for k,v in my_subcfg['realms'].items():
-            c = copy.deepcopy(my_subcfg['config'])
-            merge_dicts(c, v['config'])
+        ign_keys = ['realms'] + self.realm_merge_ingore_keys
 
-            v['config'] = c
+        for k,v in my_subcfg['realms'].items():
+            nv = {}
+
+            for ok, ov in my_subcfg.items():
+                if ok in ign_keys:
+                    continue
+
+                nv[ok] = copy.deepcopy(ov)
+
+            merge_dicts(nv, v)
             v['taskname'] = "{} in realm {}".format(my_subcfg['name'], v['realm'])
 
         return my_subcfg
@@ -300,6 +311,10 @@ class GroupInstanceNormer(RealmAttachableNormer, NormalizerNamed):
     @property
     def config_path(self):
         return ['groups', SUBDICT_METAKEY_ANY]
+
+    @property
+    def realm_merge_ingore_keys(self):
+        return ['subgroups']
 
     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
         my_subcfg = super(GroupInstanceNormer, self)._handle_specifics_presub(
