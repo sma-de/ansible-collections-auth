@@ -175,6 +175,10 @@ class RealmAttachableNormer(NormalizerBase, abc.ABC):
         return my_subcfg
 
 
+    def _modify_realm_cfg_postmerge(self, cfg, realm_cfg, cfgpath_abs):
+        return realm_cfg
+
+
     def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
         ign_keys = ['realms'] + self.realm_merge_ingore_keys
 
@@ -189,7 +193,7 @@ class RealmAttachableNormer(NormalizerBase, abc.ABC):
 
             v = my_subcfg['realms'][k]
             merge_dicts(nv, v)
-            v = nv
+            v = self._modify_realm_cfg_postmerge(cfg, nv, cfgpath_abs)
 
             v['taskname'] = "{} in realm {}".format(my_subcfg['name'], v['realm'])
             my_subcfg['realms'][k] = v
@@ -236,7 +240,7 @@ class RoleMappingsNormer(NormalizerBase):
     def __init__(self, pluginref, *args, **kwargs):
         subnorms = kwargs.setdefault('sub_normalizers', [])
         subnorms += [
-          RoleMappingInstNormerRealm(pluginref),
+          RealmRoleMappingsNormer(pluginref),
           RoleMappingInstNormerClient(pluginref),
         ]
 
@@ -244,18 +248,24 @@ class RoleMappingsNormer(NormalizerBase):
            pluginref, *args, **kwargs
         )
 
-        ##self.default_setters['realm_defaults'] = DefaultSetterConstant(True)
-
     @property
     def config_path(self):
         return ['roles']
 
     def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
         # create module cfg to attach realm roles to group
-        role_list = []
+        realm_roles_cfg = {}
 
-        for k,v in my_subcfg.get('realm', {}).items():
-            role_list.append(v['name'])
+        prl = my_subcfg['realm']['_present_roles']
+        arl = my_subcfg['realm']['_absent_roles']
+
+        if prl or arl:
+            tmp = my_subcfg['realm']['strict']
+            realm_roles_cfg['strict'] = tmp
+            realm_roles_cfg['present'] = prl
+
+            if not tmp:
+                realm_roles_cfg['absent'] = prl
 
         # .. also do the same for client mappings
         # TODO
@@ -264,25 +274,69 @@ class RoleMappingsNormer(NormalizerBase):
 
         modcfg = None
 
-        if role_list:
+        if realm_roles_cfg:
             modcfg = copy.deepcopy(pcfg['config'])
             modcfg['state'] = 'present'
-            modcfg['realm_roles'] = role_list
+            modcfg['realm_roles'] = realm_roles_cfg
             ##modcfg['client_roles'] = role_list
 
         my_subcfg['_modcfg'] = modcfg
         return my_subcfg
 
 
+class RealmRoleMappingsNormer(NormalizerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          RoleMappingInstNormerRealm(pluginref),
+        ]
+
+        super(RealmRoleMappingsNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+        self.default_setters['strict'] = DefaultSetterConstant(False)
+
+    @property
+    def config_path(self):
+        return ['realm']
+
+    def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
+        # convert user cfg to module cfg
+        present_roles = []
+        absent_roles = []
+
+        for k,v in my_subcfg.get('roles', {}).items():
+            if v['enabled']:
+                present_roles.append(v['name'])
+            elif not my_subcfg['strict']:
+                absent_roles.append(v['name'])
+
+        my_subcfg['_present_roles'] = present_roles
+        my_subcfg['_absent_roles'] = absent_roles
+        return my_subcfg
+
+
 class RoleMappingInstNormerBase(NormalizerNamed):
-    pass
+
+    def __init__(self, pluginref, *args, **kwargs):
+        super(RoleMappingInstNormerBase, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+        self.default_setters['enabled'] = DefaultSetterConstant(True)
+
+    @property
+    def simpleform_key(self):
+        return 'enabled'
 
 
 class RoleMappingInstNormerRealm(RoleMappingInstNormerBase):
 
     @property
     def config_path(self):
-        return ['realm', SUBDICT_METAKEY_ANY]
+        return ['roles', SUBDICT_METAKEY_ANY]
 
 class RoleMappingInstNormerClient(RoleMappingInstNormerBase):
 
@@ -319,6 +373,11 @@ class GroupInstanceNormer(RealmAttachableNormer, NormalizerNamed):
     @property
     def realm_merge_ingore_keys(self):
         return ['subgroups']
+
+    def _modify_realm_cfg_postmerge(self, cfg, realm_cfg, cfgpath_abs):
+        return RoleMappingsNormer(self.pluginref).normalize_config(
+            realm_cfg, global_cfg=cfg, cfgpath_abs=cfgpath_abs
+        )
 
     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
         my_subcfg = super(GroupInstanceNormer, self)._handle_specifics_presub(
