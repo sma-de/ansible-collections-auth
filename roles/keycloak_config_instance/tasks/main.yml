@@ -54,6 +54,26 @@
       loop_var: _iter_user_feds
 
 ##### create/delete clients
+# TODO
+
+##### create/delete roles
+# TODO
+
+##### handle user role mappings
+# TODO
+
+##### handle group role mappings
+
+  ##
+  ## note: order is important here, as this can depend on group settings,
+  ##   user federations, clients and roles this must be done here and
+  ##   not earlier
+  ##
+  - include_tasks: handle_grprole_mappings.yml
+    loop: >-
+      {{ smabot_auth_keycloak_config_instance_args_normed.groups._grplist }}
+    loop_control:
+      loop_var: _iter_groups
 
 
 ##### final post processing

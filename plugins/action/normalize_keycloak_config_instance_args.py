@@ -216,11 +216,90 @@ class GroupsNormer(NormalizerBase):
         return my_subcfg
 
 
+class RoleMappingsNormer(NormalizerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          RoleMappingInstNormerRealm(pluginref),
+          RoleMappingInstNormerClient(pluginref),
+        ]
+
+        super(RoleMappingsNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+        ##self.default_setters['realm_defaults'] = DefaultSetterConstant(True)
+
+    @property
+    def config_path(self):
+        return ['roles']
+
+    def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
+        # create module cfg to attach realm roles to group
+        role_list = []
+
+        for k,v in my_subcfg.items():
+            role_list.append(v['name'])
+
+        # .. also do the same for client mappings
+        # TODO
+
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs)
+
+        modcfg = None
+
+        if role_list:
+            modcfg = copy.deepcopy(pcfg['config'])
+            modcfg['state'] = 'present'
+            modcfg['realm_roles'] = role_list
+            ##modcfg['client_roles'] = role_list
+
+        my_subcfg['_modcfg'] = modcfg
+        return my_subcfg
+
+
+class RoleMappingInstNormerBase(NormalizerNamed):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          (SubGroupInstanceNormer, True),
+        ]
+
+        super(GroupInstanceNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        my_subcfg = super(GroupInstanceNormer, self)._handle_specifics_presub(
+          cfg, my_subcfg, cfgpath_abs
+        )
+
+        my_subcfg['config']['name'] = my_subcfg['name']
+        return my_subcfg
+
+
+class RoleMappingInstNormerRealm(RoleMappingInstNormerBase):
+
+    @property
+    def config_path(self):
+        return ['realm', SUBDICT_METAKEY_ANY]
+
+class RoleMappingInstNormerClient(RoleMappingInstNormerBase):
+
+    @property
+    def config_path(self):
+        return ['client', SUBDICT_METAKEY_ANY]
+
+
 class GroupInstanceNormer(RealmAttachableNormer, NormalizerNamed):
 
     def __init__(self, pluginref, *args, **kwargs):
         subnorms = kwargs.setdefault('sub_normalizers', [])
         subnorms += [
+          RoleMappingsNormer(pluginref),
           (SubGroupInstanceNormer, True),
         ]
 
