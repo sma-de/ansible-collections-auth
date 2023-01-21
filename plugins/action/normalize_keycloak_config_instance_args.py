@@ -284,7 +284,7 @@ class SubGroupInstanceNormer(GroupInstanceNormer):
         level = 2
         while True:
             pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=level)
-            parent_chain.insert(0, pcfg['name'])
+            parent_chain.insert(0, {'name': pcfg['name']})
 
             if not realms and first_p:
                 # inherit realm settings from parent when no own are set
