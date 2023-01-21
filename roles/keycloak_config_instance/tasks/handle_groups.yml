@@ -1,5 +1,8 @@
 ---
 
+  - debug:
+      var: _iter_groups.config
+
   - name: create / delete group or subgroup  ==>>  {{ _iter_groups.taskname }}
     smabot.auth.keycloak_modules_global_auth_wrapper:
       module: community.general.keycloak_group
