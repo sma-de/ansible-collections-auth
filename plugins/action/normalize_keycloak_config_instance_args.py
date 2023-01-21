@@ -260,25 +260,7 @@ class RoleMappingsNormer(NormalizerBase):
 
 
 class RoleMappingInstNormerBase(NormalizerNamed):
-
-    def __init__(self, pluginref, *args, **kwargs):
-        subnorms = kwargs.setdefault('sub_normalizers', [])
-        subnorms += [
-          (SubGroupInstanceNormer, True),
-        ]
-
-        super(GroupInstanceNormer, self).__init__(
-           pluginref, *args, **kwargs
-        )
-
-
-    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
-        my_subcfg = super(GroupInstanceNormer, self)._handle_specifics_presub(
-          cfg, my_subcfg, cfgpath_abs
-        )
-
-        my_subcfg['config']['name'] = my_subcfg['name']
-        return my_subcfg
+    pass
 
 
 class RoleMappingInstNormerRealm(RoleMappingInstNormerBase):
