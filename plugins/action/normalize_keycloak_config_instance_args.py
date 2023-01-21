@@ -182,12 +182,29 @@ class RealmAttachableNormer(NormalizerBase, abc.ABC):
             nv = {}
 
             for ok, ov in my_subcfg.items():
+                print()
+                print("check ok => " + ok)
                 if ok in ign_keys:
                     continue
 
+                print()
+                print("check ov => " + ov)
                 nv[ok] = copy.deepcopy(ov)
 
+            print()
+            print()
+            print("da nv pre merge => " + str(nv))
+            print()
+            print()
+
             merge_dicts(nv, v)
+
+            print()
+            print()
+            print("da nv pre merge => " + str(nv))
+            print()
+            print()
+
             v['taskname'] = "{} in realm {}".format(my_subcfg['name'], v['realm'])
 
         return my_subcfg
