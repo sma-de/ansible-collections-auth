@@ -239,7 +239,7 @@ class RoleMappingsNormer(NormalizerBase):
         # create module cfg to attach realm roles to group
         role_list = []
 
-        for k,v in my_subcfg.items():
+        for k,v in my_subcfg.get('realm', {}).items():
             role_list.append(v['name'])
 
         # .. also do the same for client mappings
