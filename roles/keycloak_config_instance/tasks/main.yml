@@ -37,6 +37,14 @@
       loop_var: _iter_realms
 
 
+##### create/delete groups
+  - include_tasks: handle_groups.yml
+    loop: >-
+      {{ smabot_auth_keycloak_config_instance_args_normed.groups._grplist }}
+    loop_control:
+      loop_var: _iter_groups
+
+
 ##### create/delete user federations
   - include_tasks: handle_user_federations.yml
     loop: >-

@@ -19,6 +19,8 @@ from ansible_collections.smabot.base.plugins.module_utils.utils.dicting import S
 from ansible_collections.smabot.base.plugins.module_utils.utils.utils import ansible_assert
 
 
+MAGIC_KEY_REALM_ALL = "__all__"
+
 
 class ConfigRootNormalizer(NormalizerBase):
 
@@ -26,7 +28,8 @@ class ConfigRootNormalizer(NormalizerBase):
         subnorms = kwargs.setdefault('sub_normalizers', [])
         subnorms += [
           ConnectionNormer(pluginref),
-          RealmInstanceNormer(pluginref),
+          RealmsNormer(pluginref),
+          GroupsNormer(pluginref),
           UserFederationInstanceNormer(pluginref),
         ]
 
@@ -47,6 +50,33 @@ class ConnectionNormer(NormalizerNamed):
         return ['connection']
 
 
+class RealmsNormer(NormalizerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          RealmInstanceNormer(pluginref),
+        ]
+
+        super(RealmsNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+        self.default_setters['realms'] = DefaultSetterConstant({})
+
+    @property
+    def config_path(self):
+        return ['realms']
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        ## any keycloak server comes on default with a preset
+        ## master realm and for normalizing purposes it is good
+        ## to have it explicitly set here even when no custom user
+        ## config is associated with it
+        setdefault_none(my_subcfg['realms'], 'master', None)
+        return my_subcfg
+
+
 class RealmInstanceNormer(NormalizerNamed):
 
     def __init__(self, pluginref, *args, **kwargs):
@@ -61,7 +91,7 @@ class RealmInstanceNormer(NormalizerNamed):
 
     @property
     def config_path(self):
-        return ['realms', 'realms', SUBDICT_METAKEY_ANY]
+        return ['realms', SUBDICT_METAKEY_ANY]
 
     @property
     def name_key(self):
@@ -90,23 +120,56 @@ class RealmInstanceConfigNormer(NormalizerBase):
         return my_subcfg
 
 
-class UserFederationInstanceNormer(NormalizerNamed):
+class RealmAttachableNormer(NormalizerBase, abc.ABC):
 
     def __init__(self, pluginref, *args, **kwargs):
         subnorms = kwargs.setdefault('sub_normalizers', [])
         subnorms += [
-          UserFederationInstanceMapperInstNormer(pluginref),
-          UserFederationInstanceConfigNormer(pluginref),
-          UserFederationInstanceRealmInstNormer(pluginref),
+          RealmSettingsInstNormer(pluginref),
         ]
 
-        super(UserFederationInstanceNormer, self).__init__(
+        super(RealmAttachableNormer, self).__init__(
            pluginref, *args, **kwargs
         )
 
     @property
-    def config_path(self):
-        return ['user_federations', 'federations', SUBDICT_METAKEY_ANY]
+    @abc.abstractmethod
+    def cfg_toplvl_distance(self):
+        pass
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        unset = object()
+
+        rs = setdefault_none(my_subcfg, 'realms', {})
+
+        # optionally handle MAGIC_KEY_REALM_ALL to add this item to
+        # all realms defined
+        tmp = rs.pop(MAGIC_KEY_REALM_ALL, unset)
+
+        if tmp != unset:
+            pcfg = self.get_parentcfg(cfg, cfgpath_abs,
+              level=self.cfg_toplvl_distance
+            )
+
+            for k,v in pcfg['realms']['realms'].items():
+                t2 = tmp
+                t3 = rs.get(v['id'], None)
+
+                # on default uses any custom realm overwrite settings
+                # given for MAGIC_KEY_REALM_ALL for all realms,
+                # optionally merge this settings with specific settings
+                # given for a specific realm (with all settings being
+                # lower prio defaults)
+                if t2:
+                    t2 = copy.deepcopy(t2)
+
+                if t3:
+                    merge_dicts(t2, t3)
+
+                rs[v['id']] = t2
+
+        return my_subcfg
+
 
     def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
         for k,v in my_subcfg['realms'].items():
@@ -117,6 +180,152 @@ class UserFederationInstanceNormer(NormalizerNamed):
             v['taskname'] = "{} in realm {}".format(my_subcfg['name'], v['realm'])
 
         return my_subcfg
+
+
+class GroupsNormer(NormalizerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          GroupInstanceNormer(pluginref),
+        ]
+
+        super(GroupsNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+    @property
+    def config_path(self):
+        return ['groups']
+
+    # build ordered flat list of all groups needed by this
+    # role groups processing
+    def _build_grplist(self, cur_grps, grplst=None):
+        if grplst is None:
+            grplst = []
+
+        for k,v in cur_grps.items():
+            for rk,rv in v['realms'].items():
+                grplst.append(rv)
+            self._build_grplist(v['subgroups'], grplst=grplst)
+
+        return grplst
+
+    def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
+        my_subcfg['_grplist'] = self._build_grplist(my_subcfg['groups'])
+        return my_subcfg
+
+
+class GroupInstanceNormer(RealmAttachableNormer, NormalizerNamed):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          (SubGroupInstanceNormer, True),
+        ]
+
+        super(GroupInstanceNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+        self.default_setters['config'] = DefaultSetterConstant({})
+        self.default_setters['toplvl'] = DefaultSetterConstant(True)
+        self.default_setters['subgroups'] = DefaultSetterConstant({})
+
+    @property
+    def cfg_toplvl_distance(self):
+        return 3
+
+    @property
+    def config_path(self):
+        return ['groups', SUBDICT_METAKEY_ANY]
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        my_subcfg = super(GroupInstanceNormer, self)._handle_specifics_presub(
+          cfg, my_subcfg, cfgpath_abs
+        )
+
+        my_subcfg['config']['name'] = my_subcfg['name']
+        return my_subcfg
+
+
+class SubGroupInstanceNormer(GroupInstanceNormer):
+
+    NORMER_CONFIG_PATH = ['subgroups', SUBDICT_METAKEY_ANY]
+
+    def __init__(self, pluginref, *args, **kwargs):
+        super(SubGroupInstanceNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+        self.default_setters['toplvl'] = DefaultSetterConstant(False)
+        self._subgrp_lvls = None
+
+    @property
+    def cfg_toplvl_distance(self):
+        return super(SubGroupInstanceNormer, self).cfg_toplvl_distance\
+          + self._subgrp_lvls
+
+    @property
+    def config_path(self):
+        return self.NORMER_CONFIG_PATH
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        my_subcfg = super(SubGroupInstanceNormer, self)._handle_specifics_presub(
+          cfg, my_subcfg, cfgpath_abs
+        )
+
+        realms = my_subcfg.get('realms', None)
+
+        ## build parent chain for current subgroup
+        parent_chain = []
+        first_p = True
+
+        level = 2
+        while True:
+            pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=level)
+            parent_chain.insert(0, pcfg['name'])
+
+            if not realms and first_p:
+                # inherit realm settings from parent when no own are set
+                realms = copy.deepcopy(pcfg['realms'])
+
+            first_p = False
+
+            if pcfg['toplvl']:
+                break
+
+            level += 2
+
+        my_subcfg['parent_chain'] = parent_chain
+        my_subcfg['config']['parents'] = parent_chain
+
+        my_subcfg['realms'] = realms
+
+        self._subgrp_lvls = len(parent_chain) * 2
+        return my_subcfg
+
+
+class UserFederationInstanceNormer(RealmAttachableNormer, NormalizerNamed):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          UserFederationInstanceMapperInstNormer(pluginref),
+          UserFederationInstanceConfigNormer(pluginref),
+        ]
+
+        super(UserFederationInstanceNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+    @property
+    def cfg_toplvl_distance(self):
+        return 3
+
+    @property
+    def config_path(self):
+        return ['user_federations', 'federations', SUBDICT_METAKEY_ANY]
 
 
 class UserFederationInstanceMapperInstNormer(NormalizerNamed):
@@ -240,10 +449,10 @@ class UserFederationInstanceConfigNormer(NormalizerBase):
         return my_subcfg
 
 
-class UserFederationInstanceRealmInstNormer(NormalizerNamed):
+class RealmSettingsInstNormer(NormalizerNamed):
 
     def __init__(self, pluginref, *args, **kwargs):
-        super(UserFederationInstanceRealmInstNormer, self).__init__(
+        super(RealmSettingsInstNormer, self).__init__(
            pluginref, *args, **kwargs
         )
 
