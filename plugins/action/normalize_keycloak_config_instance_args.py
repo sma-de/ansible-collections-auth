@@ -188,7 +188,7 @@ class RealmAttachableNormer(NormalizerBase, abc.ABC):
                     continue
 
                 print()
-                print("check ov => " + ov)
+                print("check ov => " + str(ov))
                 nv[ok] = copy.deepcopy(ov)
 
             print()
