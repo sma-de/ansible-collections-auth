@@ -178,34 +178,21 @@ class RealmAttachableNormer(NormalizerBase, abc.ABC):
     def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
         ign_keys = ['realms'] + self.realm_merge_ingore_keys
 
-        for k,v in my_subcfg['realms'].items():
+        for k in my_subcfg['realms']:
             nv = {}
 
             for ok, ov in my_subcfg.items():
-                print()
-                print("check ok => " + ok)
                 if ok in ign_keys:
                     continue
 
-                print()
-                print("check ov => " + str(ov))
                 nv[ok] = copy.deepcopy(ov)
 
-            print()
-            print()
-            print("da nv pre merge => " + str(nv))
-            print()
-            print()
-
+            v = my_subcfg['realms'][k]
             merge_dicts(nv, v)
-
-            print()
-            print()
-            print("da nv pre merge => " + str(nv))
-            print()
-            print()
+            v = nv
 
             v['taskname'] = "{} in realm {}".format(my_subcfg['name'], v['realm'])
+            my_subcfg['realms'][k] = v
 
         return my_subcfg
 
@@ -415,6 +402,10 @@ class UserFederationInstanceNormer(RealmAttachableNormer, NormalizerNamed):
     @property
     def cfg_toplvl_distance(self):
         return 3
+
+    @property
+    def realm_merge_ingore_keys(self):
+        return ['mappers']
 
     @property
     def config_path(self):
