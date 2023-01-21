@@ -1,0 +1,9 @@
+---
+
+  - name: set group role mappings  ==>>  {{ _iter_groups.taskname }}
+    smabot.auth.keycloak_modules_global_auth_wrapper:
+      module: community.general.keycloak_group
+      params: >-
+        {{ _iter_groups.roles._modcfg }}
+    when: _iter_groups.roles._modcfg
+
