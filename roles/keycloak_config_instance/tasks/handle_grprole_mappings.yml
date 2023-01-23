@@ -1,9 +1,10 @@
 ---
 
-  - name: set group role mappings  ==>>  {{ _iter_groups.taskname }}
-    smabot.auth.keycloak_modules_global_auth_wrapper:
-      module: community.general.keycloak_group
-      params: >-
-        {{ _iter_groups.roles._modcfg }}
-    when: _iter_groups.roles._modcfg
+# TODO: should be done by its own independend (not yet existing) module
+##  - name: set group role mappings  ==>>  {{ _iter_groups.taskname }}
+##    smabot.auth.keycloak_modules_global_auth_wrapper:
+##      module: community.general.keycloak_group
+##      params: >-
+##        {{ _iter_groups.roles._modcfg }}
+##    when: _iter_groups.roles._modcfg
 
